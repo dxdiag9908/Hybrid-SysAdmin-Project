@@ -1,177 +1,191 @@
-🖥️ Hybrid SysAdmin Project
-🌐 Project Overview
-This project demonstrates a hybrid sysadmin environment using Windows Server 2022 and RHEL 9 virtual machines. The focus is on setting up and managing a multi-platform lab, with a strong emphasis on automation and troubleshooting.
+# 🚀 Automated Deployment of a Simple Web Application
+
+This project demonstrates the automation of a web application deployment using Ansible and Docker, fully tested on a RHEL 9 VM.  
+It is version-controlled with GitHub and designed to showcase professional DevOps practices.
+
+---
+
+## Phase 1: Environment Setup
+
+Prepare the RHEL 9 VM with all necessary tools.
+
+### 1️⃣ Install Ansible
+Ansible automates deployments and infrastructure tasks.
+
+```bash
+sudo dnf check-update
+sudo dnf install ansible -y
+ansible --version
+2️⃣ Podman (Initial Approach)
+Podman was initially used but proved incompatible with CRC on RHEL 9.
+
+bash
+Copy code
+sudo dnf install podman -y
+podman --version
+3️⃣ OpenShift CLI
+Install oc to manage OpenShift clusters.
+
+bash
+Copy code
+sudo dnf install openshift-clients -y
+oc version
+4️⃣ CodeReady Containers (CRC)
+CRC provides a minimal local OpenShift cluster.
+
+bash
+Copy code
+tar -xvf crc-*.tar.xz
+sudo mv crc /usr/local/bin
+crc start
+⚠️ Note: CRC + Podman on RHEL 9 often failed. This led to pivoting to Docker for reliability.
+
+Phase 2: Docker Deployment
+Docker replaced Podman to run containers directly.
+
+1️⃣ Install Docker
+bash
+Copy code
+sudo dnf install docker -y
+sudo systemctl enable docker
+sudo systemctl start docker
+docker --version
+2️⃣ Ansible Playbook for Docker
+Deploy an Nginx web server container using Ansible.
+
+Inventory (inventory.ini):
+
+bash
+Copy code
+[local]
+localhost ansible_connection=local
+Playbook (deploy-app.yml):
 
-Objectives
-Set up Windows Server 2022 with Active Directory, DNS, DHCP, and PowerShell remoting.
+yaml
+Copy code
+- name: Deploy simple web app using Docker
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Ensure nginx container is running
+      community.docker.docker_container:
+        name: webapp
+        image: nginx:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "8080:80"
+3️⃣ Run the Playbook
+bash
+Copy code
+ansible-playbook -i inventory.ini deploy-app.yml
+4️⃣ Verify the Web App
+bash
+Copy code
+docker ps
+Open a browser at http://localhost:8080 or http://<VM-IP>:8080
+Expected Output: Welcome to nginx!
 
-Configure RHEL 9 for seamless cross-platform integration.
+Open firewall port if needed:
 
-Automate key sysadmin tasks like user management, backups, and monitoring.
+bash
+Copy code
+sudo firewall-cmd --add-port=8080/tcp --permanent
+sudo firewall-cmd --reload
+Phase 3: Project Pivot & VM Recovery
+⚠️ Real-world incident: During the deployment, the original RHEL 9 VM became unbootable after running dnf update -y. This section documents the problem, recovery, and lessons learned.
 
-Document the entire process with scripts and notes.
+Incident Overview
+Trigger: sudo dnf update -y after Docker/Ansible setup.
 
-📁 Repository Structure
-Folder
+Symptoms: VM froze during boot; errors such as unmaintained driver pmtbase; GRUB menu looping.
 
-Description
+Impact: Original VM unusable; project at risk.
 
-windows-setup/
+Troubleshooting Steps
+Verified boot order and ISO attachment in VMware Workstation Pro.
 
-Windows Server 2022 configuration scripts (AD DS, DNS, static IP, etc.).
+Attempted BIOS/firmware checks and multiple reboots.
 
-linux-setup/
+Determined kernel/drivers update caused virtual hardware conflict.
 
-RHEL 9 configuration scripts.
+Recovery Process
+Step 1 — Backup Old VM
 
-automation-scripts/
+Power off VM completely.
 
-Cross-platform automation scripts.
+Copy entire VM folder to a safe location.
 
-docs/
+Verify backup contents:
 
-Documentation, diagrams, and lab notes.
+powershell
+Copy code
+$backupFolder = "D:\VM_Backups\RHEL9-VM_Backup"
+Get-ChildItem $backupFolder -Recurse -Filter *.vmdk
+Get-ChildItem $backupFolder -Recurse -Filter *.vmx
+Get-ChildItem $backupFolder -Recurse -Filter *.nvram
+Step 2 — Fresh VM Creation
 
-README.md
+Create new RHEL 9 VM with Server with GUI.
 
-Project overview, objectives, step status, and troubleshooting notes.
+Allocate 4 GB RAM, 2 CPU cores, 20 GB disk.
 
-.gitignore
+Boot from RHEL 9.6 ISO and complete installation.
 
-OS-specific files and VM artifacts are excluded from the repository.
+Step 3 — Attach Old VM Disk
 
-✅ Completed Steps
-Step 2: Windows Server 2022 VM Setup
-This step involved configuring the foundational network settings for the Windows Server VM.
+Add old .vmdk backup as secondary disk.
 
-IP Address: 192.168.56.10
+Mount in fresh VM and copy project:
 
-Subnet Mask: 255.255.255.0
+bash
+Copy code
+sudo mkdir /mnt/oldvm
+lsblk  # identify disk partition
+sudo mount /dev/sdb1 /mnt/oldvm
+cp -r /mnt/oldvm/project ~/project
+sudo umount /mnt/oldvm
+Step 4 — Project Recovery
 
-Default Gateway: 192.168.56.1
+Project fully restored in fresh VM.
 
-DNS Server: 127.0.0.1 (post-AD DS configuration)
+Verified all files, scripts, and previous work intact.
 
-Verification:
+Lessons Learned
 
-Network Adapter: Ethernet 4
+Always backup VM before system updates.
 
-Status: Up, Link Speed: 1 Gbps
+Updates can break VM boot unexpectedly.
 
-Default Route: 0.0.0.0/0 via 192.168.56.1
+Systematic troubleshooting: boot order, ISO, BIOS, logs.
 
-DNS Servers: 8.8.8.8, 8.8.4.4
+Document incidents: professional real-world skill demonstration.
 
-Ping Test: Successful to 8.8.8.8
+Phase 4: GitHub Version Control
+All scripts and playbooks are tracked in GitHub.
 
-Traceroute: Reached 192.168.1.1
+Commit Workflow:
 
-Step 3: Active Directory Domain Services Lab
-The AD DS lab was a continuous workflow, starting with role installation and ending with verification of the domain.
+bash
+Copy code
+git add README.md inventory.ini deploy-app.yml verify_webapp.sh
+git commit -m "Phase 4: Docker-based Ansible automation with VM recovery notes"
+git pull --rebase origin main   # resolve any conflicts
+git push origin main
+Lessons Learned
 
-Install AD DS and DNS Roles
+Docker over Podman: Stable, reliable container runtime on RHEL 9.
 
-Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
-Install-WindowsFeature DNS -IncludeManagementTools
+Ansible Automation: Repeatable, version-controlled deployments.
 
-Promote VM to Domain Controller
+Verification Matters: Test ports, firewall rules, VM access.
 
-Used the script Promote-DC.ps1 (unattended dcpromo.exe).
+GitHub Integration: Keeps infrastructure organized.
 
-Domain: corp.local
+Next Steps
 
-NetBIOS Name: CORP
+Integrate a CI/CD pipeline triggered from GitHub.
 
-DSRM Password: P@ssword123
+Optionally, deploy on Kubernetes for scaling practice.
 
-PowerShell Remoting enabled: Enable-PSRemoting -Force
-
-⚠️ Note: The default Users and Computers Containers already exist.
-
-Create Custom Organizational Units (OUs)
-
-New-ADOrganizationalUnit -Name "Staff" -Path "DC=corp,DC=local"
-New-ADOrganizationalUnit -Name "Workstations" -Path "DC=corp,DC=local"
-
-Create Test User
-
-New-ADUser -Name "TestUser1" -SamAccountName "TestUser1" -AccountPassword (ConvertTo-SecureString "P@ssword123" -AsPlainText -Force) -Enabled $true
-
-Verify Domain
-
-Get-ADDomain
-
-Domain exists.
-
-NetBIOS Name: CORP
-
-DC roles are assigned correctly.
-
-Troubleshooting Notes
-Issue
-
-Cause
-
-Resolution
-
-Install-ADDSForest cmdlet errors.
-
-Limited/older ADDSDeployment module.
-
-Used unattended dcpromo.exe instead.
-
-No automatic reboot after script.
-
-N/A
-
-Verified domain with Get-ADDomain and manually rebooted.
-
-Attempt to create OUs failed (name already in use).
-
-AD automatically creates default containers.
-
-Created custom OUs (Staff, Workstations) instead.
-
-⚠️ Troubleshooting: VM Disk Space
-After setting up your virtual machines, it's common to run into disk space issues on the host machine. This is often caused by virtual machine snapshots and suspended states that create large, temporary files.
-
-The Problem: Fragmented Virtual Disks
-Virtualization software like VMware Workstation Pro creates large files to store a VM's hard drive and memory.
-
-.vmdk files: These are your virtual hard disks. When you take a snapshot, the software creates a new, temporary .vmdk file to store all subsequent changes. Over time, these files can multiply and consume a huge amount of disk space.
-
-.vmem files: This file stores your VM's memory when you suspend it. It's often the same size as the VM's allocated RAM.
-
-A simple PowerShell script cannot be used to safely delete these files, as it will corrupt your VMs. The only safe way to clean this up is to use your virtualization software's built-in tools.
-
-The Solution: VMware's Built-in Tools
-The most reliable way to reclaim this space is to use VMware's Disk Manager to consolidate and shrink the virtual disks.
-
-Step 1: Delete Snapshots
-If the VMware Disk Cleanup option is not available, it means your virtual disk is part of a snapshot chain. You must delete the snapshot first.
-
-Shut down your VM completely (do not suspend).
-
-In VMware Workstation Pro, go to VM > Snapshots > Snapshot Manager.
-
-Select the snapshot you want to delete and click Delete. This will automatically begin a consolidation process to merge the snapshot files into your main virtual disk.
-
-Step 2: Use VMware's Command-Line Tool to Shrink the Disk
-Once the snapshot has been deleted, you can use the command-line tool to shrink the virtual disk and reclaim the remaining space.
-
-Open Command Prompt as an administrator.
-
-Navigate to the VMware installation directory:
-
-cd "C:\Program Files (x86)\VMware\VMware Workstation"
-
-Run the shrink command, targeting your VM's primary virtual disk file:
-
-vmware-vdiskmanager.exe -k "C:\VMS\RHEL9-VM\Rhel 9\Red Hat Enterprise Linux 9 64-bit.vmdk"
-
-Step 3: Verify the Cleanup
-After the shrink process completes, you can verify the amount of free space you've reclaimed with this PowerShell command:
-
-Get-PSDrive C | Select-Object Name, Used, Free, @{Name="Free (GB)";Expression={[math]::Round($_.Free / 1GB, 2)}}
-
-This process should free up a significant amount of disk space, allowing you to run both of your VMs simultaneously.
+Maintain all scripts and documentation for professional portfolio demonstratio
